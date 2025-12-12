@@ -1,0 +1,9 @@
+{
+  "host": "0.0.0.0",
+  "port": 5003,
+  "account_id": "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV",
+  "secret": "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG",
+  "network_passphrase": "Test SDF Network ; September 2015",
+  "soroban_rpc_url": "https://soroban-testnet.stellar.org",
+  "bearer_token": "987654321"
+}

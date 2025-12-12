@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  remote-signer:
+    build: .
+    container_name: stellar-remote-signer
+    ports:
+      - "5003:5003"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=5003
+      - ACCOUNT_ID=${ACCOUNT_ID}
+      - SECRET=${SECRET}
+      - NETWORK_PASSPHRASE=${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      - BEARER_TOKEN=${BEARER_TOKEN:-987654321}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
