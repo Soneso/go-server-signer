@@ -235,3 +235,80 @@ func TestSign45_MethodNotAllowed(t *testing.T) {
 		t.Errorf("expected status 405, got %d", rr.Code)
 	}
 }
+
+func TestSign45_MissingAuth(t *testing.T) {
+	cfg := &config.Config{
+		BearerToken: "test-token",
+	}
+	h := New(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-45", nil)
+	rr := httptest.NewRecorder()
+	h.Sign45(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestSign45_InvalidToken(t *testing.T) {
+	cfg := &config.Config{
+		BearerToken: "test-token",
+	}
+	h := New(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-45", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	rr := httptest.NewRecorder()
+	h.Sign45(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestSign45_MissingAuthorizationEntry(t *testing.T) {
+	cfg := &config.Config{
+		BearerToken: "test-token",
+	}
+	h := New(cfg)
+
+	reqBody := Sign45Request{
+		NetworkPassphrase: network.TestNetworkPassphrase,
+	}
+	reqBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-45", bytes.NewReader(reqBytes))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	h.Sign45(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rr.Code)
+	}
+}
+
+func TestSign45_MissingNetworkPassphrase(t *testing.T) {
+	cfg := &config.Config{
+		BearerToken: "test-token",
+	}
+	h := New(cfg)
+
+	reqBody := Sign45Request{
+		AuthorizationEntry: "test-xdr",
+	}
+	reqBytes, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-45", bytes.NewReader(reqBytes))
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	h.Sign45(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rr.Code)
+	}
+}

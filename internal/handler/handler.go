@@ -34,14 +34,14 @@ type SignResponse struct {
 
 // Sign45Request represents the request body for SEP-45 signing
 type Sign45Request struct {
-	AuthorizationEntries string `json:"authorization_entries"`
-	NetworkPassphrase    string `json:"network_passphrase"`
+	AuthorizationEntry string `json:"authorization_entry"`
+	NetworkPassphrase  string `json:"network_passphrase"`
 }
 
 // Sign45Response represents the response body for SEP-45 signing
 type Sign45Response struct {
-	AuthorizationEntries string `json:"authorization_entries"`
-	NetworkPassphrase    string `json:"network_passphrase"`
+	AuthorizationEntry string `json:"authorization_entry"`
+	NetworkPassphrase  string `json:"network_passphrase"`
 }
 
 // ErrorResponse represents an error response
@@ -149,8 +149,8 @@ func (h *Handler) Sign45(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.AuthorizationEntries == "" {
-		writeError(w, http.StatusBadRequest, "missing authorization_entries parameter")
+	if req.AuthorizationEntry == "" {
+		writeError(w, http.StatusBadRequest, "missing authorization_entry parameter")
 		return
 	}
 	if req.NetworkPassphrase == "" {
@@ -158,11 +158,12 @@ func (h *Handler) Sign45(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sign the authorization entries
-	signedEntries, err := signer.SignSEP45AuthorizationEntries(
-		req.AuthorizationEntries,
+	// Sign the authorization entry
+	signedEntry, err := signer.SignSEP45AuthorizationEntry(
+		req.AuthorizationEntry,
 		req.NetworkPassphrase,
 		h.cfg.Secret,
+		h.cfg.AccountID,
 		h.cfg.SorobanRPCURL,
 	)
 	if err != nil {
@@ -170,10 +171,10 @@ func (h *Handler) Sign45(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return signed entries
+	// Return signed entry
 	writeJSON(w, http.StatusOK, Sign45Response{
-		AuthorizationEntries: signedEntries,
-		NetworkPassphrase:    req.NetworkPassphrase,
+		AuthorizationEntry: signedEntry,
+		NetworkPassphrase:  req.NetworkPassphrase,
 	})
 }
 

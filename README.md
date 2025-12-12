@@ -175,14 +175,14 @@ curl -X POST http://localhost:5003/sign-sep-10 \
 
 ### POST /sign-sep-45
 
-Signs SEP-45 authorization entries for client domain verification.
+Signs a single SEP-45 authorization entry for client domain verification.
 
 **Authentication:** Required (Bearer token)
 
 **Request:**
 ```json
 {
-  "authorization_entries": "<base64 XDR array of SorobanAuthorizationEntry>",
+  "authorization_entry": "<base64 XDR of single SorobanAuthorizationEntry>",
   "network_passphrase": "Test SDF Network ; September 2015"
 }
 ```
@@ -190,8 +190,16 @@ Signs SEP-45 authorization entries for client domain verification.
 **Response:**
 ```json
 {
-  "authorization_entries": "<signed base64 XDR array>",
+  "authorization_entry": "<signed base64 XDR of single SorobanAuthorizationEntry>",
   "network_passphrase": "Test SDF Network ; September 2015"
+}
+```
+
+**Validation:**
+The server validates that the authorization entry's address matches the server's signing key. If it doesn't match, an error is returned:
+```json
+{
+  "error": "entry address does not match signing key"
 }
 ```
 
@@ -201,7 +209,7 @@ curl -X POST http://localhost:5003/sign-sep-45 \
   -H "Authorization: Bearer 987654321" \
   -H "Content-Type: application/json" \
   -d '{
-    "authorization_entries": "AAAAAgAAAAD...",
+    "authorization_entry": "AAAAAgAAAAD...",
     "network_passphrase": "Test SDF Network ; September 2015"
   }'
 ```
@@ -295,16 +303,18 @@ Error responses include a JSON body with error details:
 
 The SEP-45 signing process involves:
 
-1. Decoding the XDR array of `SorobanAuthorizationEntry` objects
-2. Finding the entry that matches the signer's account ID
-3. Building a `HashIdPreimage` with type `ENVELOPE_TYPE_SOROBAN_AUTHORIZATION` containing:
+1. Decoding the base64 XDR of a single `SorobanAuthorizationEntry` object
+2. Validating that the entry's address matches the signer's account ID
+3. Setting the `signature_expiration_ledger` to current ledger + 10
+4. Building a `HashIdPreimage` with type `ENVELOPE_TYPE_SOROBAN_AUTHORIZATION` containing:
    - `network_id` (SHA256 hash of network passphrase)
    - `nonce` from address credentials
-   - `signature_expiration_ledger` from address credentials
+   - `signature_expiration_ledger` (current ledger + 10)
    - `root_invocation` from the entry
-4. Computing SHA256 hash of the preimage
-5. Signing the hash with the keypair
-6. Setting the signature as an `SCVal` Vec containing a Map with `public_key` and `signature` bytes
+5. Computing SHA256 hash of the preimage
+6. Signing the hash with the keypair
+7. Setting the signature as an `SCVal` Vec containing a Map with `public_key` and `signature` bytes
+8. Encoding the signed entry back to base64 XDR
 
 ## Production Deployment
 

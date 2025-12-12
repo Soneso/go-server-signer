@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,8 +73,8 @@ func getLatestLedger(rpcURL string) (uint32, error) {
 	return rpcResp.Result.Sequence, nil
 }
 
-// SignSEP45AuthorizationEntries signs SEP-45 authorization entries
-func SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpcURL string) (string, error) {
+// SignSEP45AuthorizationEntry signs a single SEP-45 authorization entry
+func SignSEP45AuthorizationEntry(entryXDR, networkPassphrase, secretKey, signingAccountID, rpcURL string) (string, error) {
 	// Parse the keypair from secret
 	kp, err := keypair.Parse(secretKey)
 	if err != nil {
@@ -89,39 +88,60 @@ func SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpc
 
 	clientDomainAccount := fullKP.Address()
 
+	// Verify the signing account ID matches the keypair
+	if signingAccountID != clientDomainAccount {
+		return "", fmt.Errorf("signing account ID does not match keypair")
+	}
+
 	// Get raw public key bytes using strkey.Decode
 	rawPublicKey, err := strkey.Decode(strkey.VersionByteAccountID, clientDomainAccount)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode public key: %w", err)
 	}
 
-	// Decode base64 XDR array of SorobanAuthorizationEntry
-	xdrBytes, err := base64.StdEncoding.DecodeString(entriesXDR)
+	// Decode base64 XDR of single SorobanAuthorizationEntry
+	xdrBytes, err := base64.StdEncoding.DecodeString(entryXDR)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode base64: %w", err)
 	}
 
-	// Read array length (first 4 bytes, big-endian unsigned int)
-	if len(xdrBytes) < 4 {
-		return "", fmt.Errorf("invalid XDR: too short to contain array length")
+	// Parse the entry using bytes.Reader
+	var entry xdr.SorobanAuthorizationEntry
+	reader := bytes.NewReader(xdrBytes)
+	_, err = xdr.Unmarshal(reader, &entry)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal entry: %w", err)
 	}
 
-	count := binary.BigEndian.Uint32(xdrBytes[:4])
-	if count == 0 {
-		return "", fmt.Errorf("no authorization entries found")
+	// Validate the entry uses address credentials
+	if entry.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
+		return "", fmt.Errorf("entry does not use address credentials")
 	}
 
-	// Parse each entry using bytes.Reader
-	entries := make([]xdr.SorobanAuthorizationEntry, 0, count)
-	reader := bytes.NewReader(xdrBytes[4:])
+	addrCreds := entry.Credentials.Address
+	if addrCreds == nil {
+		return "", fmt.Errorf("address credentials are nil")
+	}
 
-	for i := uint32(0); i < count; i++ {
-		var entry xdr.SorobanAuthorizationEntry
-		_, err := xdr.Unmarshal(reader, &entry)
-		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal entry %d: %w", i, err)
-		}
-		entries = append(entries, entry)
+	// Validate the address is an account type
+	if addrCreds.Address.Type != xdr.ScAddressTypeScAddressTypeAccount {
+		return "", fmt.Errorf("entry address is not an account type")
+	}
+
+	// Extract the account ID from the address
+	accountID := addrCreds.Address.AccountId
+	if accountID == nil {
+		return "", fmt.Errorf("entry account ID is nil")
+	}
+
+	entryAccount, err := strkey.Encode(strkey.VersionByteAccountID, accountID.Ed25519[:])
+	if err != nil {
+		return "", fmt.Errorf("failed to encode entry account ID: %w", err)
+	}
+
+	// Validate that the entry's address matches the signer's account
+	if entryAccount != clientDomainAccount {
+		return "", fmt.Errorf("entry address does not match signing key")
 	}
 
 	// Calculate network ID (SHA256 hash of network passphrase)
@@ -135,129 +155,85 @@ func SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpc
 		return "", fmt.Errorf("failed to fetch current ledger: %w", err)
 	}
 
-	// Find and sign the client domain entry
-	for i := range entries {
-		entry := &entries[i]
+	// Set signature expiration ledger to current ledger + 10
+	addrCreds.SignatureExpirationLedger = xdr.Uint32(currentLedger + 10)
 
-		// Check if this entry uses address credentials
-		if entry.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
-			continue
-		}
-
-		addrCreds := entry.Credentials.Address
-		if addrCreds == nil {
-			continue
-		}
-
-		// Get the address as string
-		if addrCreds.Address.Type != xdr.ScAddressTypeScAddressTypeAccount {
-			continue
-		}
-
-		// Extract the account ID from the address
-		accountID := addrCreds.Address.AccountId
-		if accountID == nil {
-			continue
-		}
-
-		entryAccount, err := strkey.Encode(strkey.VersionByteAccountID, accountID.Ed25519[:])
-		if err != nil {
-			continue
-		}
-
-		// Check if this is the client domain entry
-		if entryAccount != clientDomainAccount {
-			continue
-		}
-
-		// Set signature expiration ledger to current ledger + 10
-		addrCreds.SignatureExpirationLedger = xdr.Uint32(currentLedger + 10)
-
-		// Build preimage for signing
-		preimage := xdr.HashIdPreimage{
-			Type: xdr.EnvelopeTypeEnvelopeTypeSorobanAuthorization,
-			SorobanAuthorization: &xdr.HashIdPreimageSorobanAuthorization{
-				NetworkId:                 networkID,
-				Nonce:                     addrCreds.Nonce,
-				SignatureExpirationLedger: addrCreds.SignatureExpirationLedger,
-				Invocation:                entry.RootInvocation,
-			},
-		}
-
-		// Marshal preimage to bytes
-		preimageBytes, err := preimage.MarshalBinary()
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal preimage: %w", err)
-		}
-
-		// Hash the preimage
-		payload := sha256.Sum256(preimageBytes)
-
-		// Sign the hash
-		signature, err := fullKP.Sign(payload[:])
-		if err != nil {
-			return "", fmt.Errorf("failed to sign payload: %w", err)
-		}
-
-		// Build signature entry as Map with public_key and signature
-		publicKeyBytes := xdr.ScBytes(rawPublicKey)
-		signatureBytes := xdr.ScBytes(signature)
-
-		publicKeySymbol := xdr.ScSymbol("public_key")
-		signatureSymbol := xdr.ScSymbol("signature")
-
-		scMap := xdr.ScMap{
-			xdr.ScMapEntry{
-				Key: xdr.ScVal{
-					Type: xdr.ScValTypeScvSymbol,
-					Sym:  &publicKeySymbol,
-				},
-				Val: xdr.ScVal{
-					Type:  xdr.ScValTypeScvBytes,
-					Bytes: &publicKeyBytes,
-				},
-			},
-			xdr.ScMapEntry{
-				Key: xdr.ScVal{
-					Type: xdr.ScValTypeScvSymbol,
-					Sym:  &signatureSymbol,
-				},
-				Val: xdr.ScVal{
-					Type:  xdr.ScValTypeScvBytes,
-					Bytes: &signatureBytes,
-				},
-			},
-		}
-		scMapPtr := &scMap
-
-		sigEntry := xdr.ScVal{
-			Type: xdr.ScValTypeScvMap,
-			Map:  &scMapPtr,
-		}
-
-		// Set signature as vector with one entry
-		vec := xdr.ScVec{sigEntry}
-		vecPtr := &vec
-		addrCreds.Signature = xdr.ScVal{
-			Type: xdr.ScValTypeScvVec,
-			Vec:  &vecPtr,
-		}
+	// Build preimage for signing
+	preimage := xdr.HashIdPreimage{
+		Type: xdr.EnvelopeTypeEnvelopeTypeSorobanAuthorization,
+		SorobanAuthorization: &xdr.HashIdPreimageSorobanAuthorization{
+			NetworkId:                 networkID,
+			Nonce:                     addrCreds.Nonce,
+			SignatureExpirationLedger: addrCreds.SignatureExpirationLedger,
+			Invocation:                entry.RootInvocation,
+		},
 	}
 
-	// Encode entries back to base64 XDR
-	// First, write the array length
-	resultBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(resultBytes, uint32(len(entries)))
+	// Marshal preimage to bytes
+	preimageBytes, err := preimage.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal preimage: %w", err)
+	}
 
-	// Then append each entry
-	for i := range entries {
-		entryBytes, err := entries[i].MarshalBinary()
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal entry %d: %w", i, err)
-		}
-		resultBytes = append(resultBytes, entryBytes...)
+	// Hash the preimage
+	payload := sha256.Sum256(preimageBytes)
+
+	// Sign the hash
+	signature, err := fullKP.Sign(payload[:])
+	if err != nil {
+		return "", fmt.Errorf("failed to sign payload: %w", err)
+	}
+
+	// Build signature entry as Map with public_key and signature
+	publicKeyBytes := xdr.ScBytes(rawPublicKey)
+	signatureBytes := xdr.ScBytes(signature)
+
+	publicKeySymbol := xdr.ScSymbol("public_key")
+	signatureSymbol := xdr.ScSymbol("signature")
+
+	scMap := xdr.ScMap{
+		xdr.ScMapEntry{
+			Key: xdr.ScVal{
+				Type: xdr.ScValTypeScvSymbol,
+				Sym:  &publicKeySymbol,
+			},
+			Val: xdr.ScVal{
+				Type:  xdr.ScValTypeScvBytes,
+				Bytes: &publicKeyBytes,
+			},
+		},
+		xdr.ScMapEntry{
+			Key: xdr.ScVal{
+				Type: xdr.ScValTypeScvSymbol,
+				Sym:  &signatureSymbol,
+			},
+			Val: xdr.ScVal{
+				Type:  xdr.ScValTypeScvBytes,
+				Bytes: &signatureBytes,
+			},
+		},
+	}
+	scMapPtr := &scMap
+
+	sigEntry := xdr.ScVal{
+		Type: xdr.ScValTypeScvMap,
+		Map:  &scMapPtr,
+	}
+
+	// Set signature as vector with one entry
+	vec := xdr.ScVec{sigEntry}
+	vecPtr := &vec
+	addrCreds.Signature = xdr.ScVal{
+		Type: xdr.ScValTypeScvVec,
+		Vec:  &vecPtr,
+	}
+
+	// Marshal the signed entry back to bytes
+	entryBytes, err := entry.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal signed entry: %w", err)
 	}
 
 	// Encode to base64
-	return base64.StdEncoding.EncodeToString(resultBytes), nil
+	return base64.StdEncoding.EncodeToString(entryBytes), nil
 }

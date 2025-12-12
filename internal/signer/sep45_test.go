@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +16,7 @@ import (
 	"github.com/stellar/go/xdr"
 )
 
-func TestSignSEP45AuthorizationEntries(t *testing.T) {
+func TestSignSEP45AuthorizationEntry(t *testing.T) {
 	// Test keypair and account
 	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
 	expectedAccount := "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV"
@@ -72,22 +71,17 @@ func TestSignSEP45AuthorizationEntries(t *testing.T) {
 	// Build test authorization entry
 	entry := createTestAuthorizationEntry(t, expectedAccount)
 
-	// Encode entry to XDR array format (4 bytes length + XDR data)
-	entriesXDR := encodeAuthorizationEntries(t, []xdr.SorobanAuthorizationEntry{entry})
+	// Encode entry to XDR
+	entryXDR := encodeAuthorizationEntry(t, entry)
 
-	// Sign the authorization entries
-	signedEntriesXDR, err := SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpcServer.URL)
+	// Sign the authorization entry
+	signedEntryXDR, err := SignSEP45AuthorizationEntry(entryXDR, networkPassphrase, secretKey, expectedAccount, rpcServer.URL)
 	if err != nil {
-		t.Fatalf("SignSEP45AuthorizationEntries failed: %v", err)
+		t.Fatalf("SignSEP45AuthorizationEntry failed: %v", err)
 	}
 
-	// Decode the signed entries
-	signedEntries := decodeAuthorizationEntries(t, signedEntriesXDR)
-	if len(signedEntries) != 1 {
-		t.Fatalf("expected 1 signed entry, got %d", len(signedEntries))
-	}
-
-	signedEntry := signedEntries[0]
+	// Decode the signed entry
+	signedEntry := decodeAuthorizationEntry(t, signedEntryXDR)
 
 	// Verify credentials type
 	if signedEntry.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
@@ -175,42 +169,28 @@ func TestSignSEP45AuthorizationEntries(t *testing.T) {
 	verifySignature(t, signedEntry, networkPassphrase, foundPublicKey, foundSignature)
 }
 
-func TestSignSEP45AuthorizationEntries_InvalidBase64(t *testing.T) {
+func TestSignSEP45AuthorizationEntry_InvalidBase64(t *testing.T) {
 	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
+	expectedAccount := "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV"
 	networkPassphrase := network.TestNetworkPassphrase
 
-	_, err := SignSEP45AuthorizationEntries("invalid-base64!!!", networkPassphrase, secretKey, "http://localhost:8000")
+	_, err := SignSEP45AuthorizationEntry("invalid-base64!!!", networkPassphrase, secretKey, expectedAccount, "http://localhost:8000")
 	if err == nil {
 		t.Fatal("expected error for invalid base64")
 	}
 }
 
-func TestSignSEP45AuthorizationEntries_InvalidSecret(t *testing.T) {
+func TestSignSEP45AuthorizationEntry_InvalidSecret(t *testing.T) {
 	entry := createTestAuthorizationEntry(t, "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV")
-	entriesXDR := encodeAuthorizationEntries(t, []xdr.SorobanAuthorizationEntry{entry})
+	entryXDR := encodeAuthorizationEntry(t, entry)
 
-	_, err := SignSEP45AuthorizationEntries(entriesXDR, network.TestNetworkPassphrase, "invalid-secret", "http://localhost:8000")
+	_, err := SignSEP45AuthorizationEntry(entryXDR, network.TestNetworkPassphrase, "invalid-secret", "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV", "http://localhost:8000")
 	if err == nil {
 		t.Fatal("expected error for invalid secret key")
 	}
 }
 
-func TestSignSEP45AuthorizationEntries_EmptyEntries(t *testing.T) {
-	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
-	networkPassphrase := network.TestNetworkPassphrase
-
-	// Create XDR with zero entries
-	xdrBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(xdrBytes, 0)
-	entriesXDR := base64.StdEncoding.EncodeToString(xdrBytes)
-
-	_, err := SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, "http://localhost:8000")
-	if err == nil {
-		t.Fatal("expected error for empty entries")
-	}
-}
-
-func TestSignSEP45AuthorizationEntries_RPCFailure(t *testing.T) {
+func TestSignSEP45AuthorizationEntry_RPCFailure(t *testing.T) {
 	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
 	expectedAccount := "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV"
 	networkPassphrase := network.TestNetworkPassphrase
@@ -222,20 +202,20 @@ func TestSignSEP45AuthorizationEntries_RPCFailure(t *testing.T) {
 	defer rpcServer.Close()
 
 	entry := createTestAuthorizationEntry(t, expectedAccount)
-	entriesXDR := encodeAuthorizationEntries(t, []xdr.SorobanAuthorizationEntry{entry})
+	entryXDR := encodeAuthorizationEntry(t, entry)
 
-	_, err := SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpcServer.URL)
+	_, err := SignSEP45AuthorizationEntry(entryXDR, networkPassphrase, secretKey, expectedAccount, rpcServer.URL)
 	if err == nil {
 		t.Fatal("expected error when RPC fails")
 	}
 }
 
-func TestSignSEP45AuthorizationEntries_MultipleEntries(t *testing.T) {
+func TestSignSEP45AuthorizationEntry_AddressMismatch(t *testing.T) {
 	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
 	expectedAccount := "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV"
 	networkPassphrase := network.TestNetworkPassphrase
 
-	mockLedgerSeq := uint32(2000)
+	mockLedgerSeq := uint32(1000)
 	rpcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req rpcRequest
 		json.NewDecoder(r.Body).Decode(&req)
@@ -249,36 +229,68 @@ func TestSignSEP45AuthorizationEntries_MultipleEntries(t *testing.T) {
 	}))
 	defer rpcServer.Close()
 
-	// Create a second keypair for another account
+	// Create a keypair for a different account
 	otherKp, err := keypair.Random()
 	if err != nil {
 		t.Fatalf("failed to generate random keypair: %v", err)
 	}
 
-	// Create multiple entries - one for our account, one for another account
-	entry1 := createTestAuthorizationEntry(t, expectedAccount)
-	entry2 := createTestAuthorizationEntry(t, otherKp.Address())
+	// Create entry for the other account
+	entry := createTestAuthorizationEntry(t, otherKp.Address())
+	entryXDR := encodeAuthorizationEntry(t, entry)
 
-	entriesXDR := encodeAuthorizationEntries(t, []xdr.SorobanAuthorizationEntry{entry1, entry2})
-
-	signedEntriesXDR, err := SignSEP45AuthorizationEntries(entriesXDR, networkPassphrase, secretKey, rpcServer.URL)
-	if err != nil {
-		t.Fatalf("SignSEP45AuthorizationEntries failed: %v", err)
+	// Try to sign with our key - should fail because addresses don't match
+	_, err = SignSEP45AuthorizationEntry(entryXDR, networkPassphrase, secretKey, expectedAccount, rpcServer.URL)
+	if err == nil {
+		t.Fatal("expected error when entry address doesn't match signing key")
 	}
 
-	signedEntries := decodeAuthorizationEntries(t, signedEntriesXDR)
-	if len(signedEntries) != 2 {
-		t.Fatalf("expected 2 signed entries, got %d", len(signedEntries))
+	// Verify the error message
+	expectedError := "entry address does not match signing key"
+	if err.Error() != expectedError {
+		t.Errorf("expected error %q, got %q", expectedError, err.Error())
+	}
+}
+
+func TestSignSEP45AuthorizationEntry_InvalidCredentialsType(t *testing.T) {
+	secretKey := "SBRSOOURG2E24VGDR6NKZJMBOSOHVT6GV7EECUR3ZBE7LGSSVYN5VMOG"
+	expectedAccount := "GBUTDNISXHXBMZE5I4U5INJTY376S5EW2AF4SQA2SWBXUXJY3OIZQHMV"
+	networkPassphrase := network.TestNetworkPassphrase
+
+	// Create an entry with source account credentials (not address credentials)
+	contractIDBytes := [32]byte{}
+	copy(contractIDBytes[:], []byte("test_contract"))
+	contractID := xdr.ContractId(contractIDBytes)
+	contractAddress := xdr.ScAddress{
+		Type:       xdr.ScAddressTypeScAddressTypeContract,
+		ContractId: &contractID,
 	}
 
-	// First entry should be signed
-	if signedEntries[0].Credentials.Address.Signature.Type != xdr.ScValTypeScvVec {
-		t.Error("first entry should be signed")
+	functionName := xdr.ScSymbol("test_function")
+	rootInvocation := xdr.SorobanAuthorizedInvocation{
+		Function: xdr.SorobanAuthorizedFunction{
+			Type: xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn,
+			ContractFn: &xdr.InvokeContractArgs{
+				ContractAddress: contractAddress,
+				FunctionName:    functionName,
+				Args:            xdr.ScVec{},
+			},
+		},
+		SubInvocations: []xdr.SorobanAuthorizedInvocation{},
 	}
 
-	// Second entry should NOT be signed (different account)
-	if signedEntries[1].Credentials.Address.SignatureExpirationLedger != 0 {
-		t.Error("second entry should not have expiration set")
+	entry := xdr.SorobanAuthorizationEntry{
+		Credentials: xdr.SorobanCredentials{
+			Type: xdr.SorobanCredentialsTypeSorobanCredentialsSourceAccount,
+		},
+		RootInvocation: rootInvocation,
+	}
+
+	entryXDR := encodeAuthorizationEntry(t, entry)
+
+	_, err := SignSEP45AuthorizationEntry(entryXDR, networkPassphrase, secretKey, expectedAccount, "http://localhost:8000")
+	if err == nil {
+		t.Fatal("expected error for source account credentials")
 	}
 }
 
@@ -319,16 +331,14 @@ func createTestAuthorizationEntry(t *testing.T, accountID string) xdr.SorobanAut
 	}
 
 	// Create nonce
-	nonceBytes := [32]byte{}
-	copy(nonceBytes[:], []byte("test_nonce"))
 	nonce := xdr.Int64(12345)
 
 	// Create address credentials with signatureExpirationLedger = 0
 	addressCreds := xdr.SorobanAddressCredentials{
-		Address:                    address,
-		Nonce:                      nonce,
-		SignatureExpirationLedger:  0, // Should be set by signing function
-		Signature:                  xdr.ScVal{Type: xdr.ScValTypeScvVoid},
+		Address:                   address,
+		Nonce:                     nonce,
+		SignatureExpirationLedger: 0, // Should be set by signing function
+		Signature:                 xdr.ScVal{Type: xdr.ScValTypeScvVoid},
 	}
 
 	// Create authorization entry
@@ -343,51 +353,33 @@ func createTestAuthorizationEntry(t *testing.T, accountID string) xdr.SorobanAut
 	return entry
 }
 
-func encodeAuthorizationEntries(t *testing.T, entries []xdr.SorobanAuthorizationEntry) string {
+func encodeAuthorizationEntry(t *testing.T, entry xdr.SorobanAuthorizationEntry) string {
 	t.Helper()
 
-	// Write array length (4 bytes, big-endian)
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(len(entries)))
-
-	// Append each entry
-	for i, entry := range entries {
-		entryBytes, err := entry.MarshalBinary()
-		if err != nil {
-			t.Fatalf("failed to marshal entry %d: %v", i, err)
-		}
-		buf = append(buf, entryBytes...)
+	entryBytes, err := entry.MarshalBinary()
+	if err != nil {
+		t.Fatalf("failed to marshal entry: %v", err)
 	}
 
-	return base64.StdEncoding.EncodeToString(buf)
+	return base64.StdEncoding.EncodeToString(entryBytes)
 }
 
-func decodeAuthorizationEntries(t *testing.T, entriesXDR string) []xdr.SorobanAuthorizationEntry {
+func decodeAuthorizationEntry(t *testing.T, entryXDR string) xdr.SorobanAuthorizationEntry {
 	t.Helper()
 
-	xdrBytes, err := base64.StdEncoding.DecodeString(entriesXDR)
+	xdrBytes, err := base64.StdEncoding.DecodeString(entryXDR)
 	if err != nil {
 		t.Fatalf("failed to decode base64: %v", err)
 	}
 
-	if len(xdrBytes) < 4 {
-		t.Fatal("XDR too short")
+	var entry xdr.SorobanAuthorizationEntry
+	reader := bytes.NewReader(xdrBytes)
+	_, err = xdr.Unmarshal(reader, &entry)
+	if err != nil {
+		t.Fatalf("failed to unmarshal entry: %v", err)
 	}
 
-	count := binary.BigEndian.Uint32(xdrBytes[:4])
-	entries := make([]xdr.SorobanAuthorizationEntry, 0, count)
-
-	reader := bytes.NewReader(xdrBytes[4:])
-	for i := uint32(0); i < count; i++ {
-		var entry xdr.SorobanAuthorizationEntry
-		_, err := xdr.Unmarshal(reader, &entry)
-		if err != nil {
-			t.Fatalf("failed to unmarshal entry %d: %v", i, err)
-		}
-		entries = append(entries, entry)
-	}
-
-	return entries
+	return entry
 }
 
 func verifySignature(t *testing.T, entry xdr.SorobanAuthorizationEntry, networkPassphrase string, publicKey, signature []byte) {
