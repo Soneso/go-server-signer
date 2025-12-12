@@ -44,8 +44,8 @@ func main() {
 
 	// Setup HTTP routes
 	mux := http.NewServeMux()
-	mux.HandleFunc("/sign", h.Sign)
-	mux.HandleFunc("/sign45", h.Sign45)
+	mux.HandleFunc("/sign-sep-10", h.Sign)
+	mux.HandleFunc("/sign-sep-45", h.Sign45)
 	mux.HandleFunc("/.well-known/stellar.toml", h.StellarToml)
 	mux.HandleFunc("/health", h.Health)
 
@@ -73,8 +73,8 @@ func main() {
 		log.Printf("Account ID: %s", cfg.AccountID)
 		log.Printf("Network Passphrase: %s", cfg.NetworkPassphrase)
 		log.Println("Endpoints:")
-		log.Println("  POST   /sign")
-		log.Println("  POST   /sign45")
+		log.Println("  POST   /sign-sep-10")
+		log.Println("  POST   /sign-sep-45")
 		log.Println("  GET    /.well-known/stellar.toml")
 		log.Println("  GET    /health")
 

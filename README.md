@@ -140,7 +140,7 @@ NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
 curl http://localhost:5003/.well-known/stellar.toml
 ```
 
-### POST /sign
+### POST /sign-sep-10
 
 Signs a SEP-10 transaction envelope.
 
@@ -164,7 +164,7 @@ Signs a SEP-10 transaction envelope.
 
 **Example:**
 ```bash
-curl -X POST http://localhost:5003/sign \
+curl -X POST http://localhost:5003/sign-sep-10 \
   -H "Authorization: Bearer 987654321" \
   -H "Content-Type: application/json" \
   -d '{
@@ -173,7 +173,7 @@ curl -X POST http://localhost:5003/sign \
   }'
 ```
 
-### POST /sign45
+### POST /sign-sep-45
 
 Signs SEP-45 authorization entries for client domain verification.
 
@@ -197,7 +197,7 @@ Signs SEP-45 authorization entries for client domain verification.
 
 **Example:**
 ```bash
-curl -X POST http://localhost:5003/sign45 \
+curl -X POST http://localhost:5003/sign-sep-45 \
   -H "Authorization: Bearer 987654321" \
   -H "Content-Type: application/json" \
   -d '{

@@ -58,7 +58,7 @@ echo ""
 
 # Test 3: Sign endpoint - missing auth
 echo "Test 3: Sign endpoint - authentication required"
-response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign" \
+response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign-sep-10" \
     -H "Content-Type: application/json" \
     -d '{"transaction": "test", "network_passphrase": "Test"}')
 http_code=$(echo "$response" | tail -n 1)
@@ -72,7 +72,7 @@ echo ""
 
 # Test 4: Sign endpoint - missing transaction
 echo "Test 4: Sign endpoint - validation"
-response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign" \
+response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign-sep-10" \
     -H "Authorization: Bearer ${BEARER_TOKEN}" \
     -H "Content-Type: application/json" \
     -d '{"network_passphrase": "Test"}')
@@ -87,7 +87,7 @@ echo ""
 
 # Test 5: Sign45 endpoint - missing auth
 echo "Test 5: Sign45 endpoint - authentication required"
-response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign45" \
+response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign-sep-45" \
     -H "Content-Type: application/json" \
     -d '{"authorization_entries": "test", "network_passphrase": "Test"}')
 http_code=$(echo "$response" | tail -n 1)
@@ -101,7 +101,7 @@ echo ""
 
 # Test 6: Sign45 endpoint - missing entries
 echo "Test 6: Sign45 endpoint - validation"
-response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign45" \
+response=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/sign-sep-45" \
     -H "Authorization: Bearer ${BEARER_TOKEN}" \
     -H "Content-Type: application/json" \
     -d '{"network_passphrase": "Test"}')
@@ -116,7 +116,7 @@ echo ""
 
 # Test 7: Method not allowed
 echo "Test 7: Method validation"
-response=$(curl -s -w "\n%{http_code}" -X GET "${BASE_URL}/sign")
+response=$(curl -s -w "\n%{http_code}" -X GET "${BASE_URL}/sign-sep-10")
 http_code=$(echo "$response" | tail -n 1)
 
 if [ "$http_code" = "405" ]; then

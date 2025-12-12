@@ -80,7 +80,7 @@ func writeError(w http.ResponseWriter, statusCode int, message string) {
 	writeJSON(w, statusCode, ErrorResponse{Error: message})
 }
 
-// Sign handles POST /sign for SEP-10 transaction signing
+// Sign handles POST /sign-sep-10 for SEP-10 transaction signing
 func (h *Handler) Sign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -128,7 +128,7 @@ func (h *Handler) Sign(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Sign45 handles POST /sign45 for SEP-45 authorization entries signing
+// Sign45 handles POST /sign-sep-45 for SEP-45 authorization entries signing
 func (h *Handler) Sign45(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")

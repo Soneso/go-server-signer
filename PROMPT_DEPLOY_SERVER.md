@@ -16,8 +16,8 @@ This is a Go server that provides client domain signing for Stellar SEP-10 and S
 |----------|--------|-------------|
 | `/health` | GET | Health check, returns `{"status":"ok"}` |
 | `/.well-known/stellar.toml` | GET | Returns Stellar TOML with SIGNING_KEY |
-| `/sign` | POST | Signs SEP-10 transaction envelopes |
-| `/sign45` | POST | Signs SEP-45 authorization entries |
+| `/sign-sep-10` | POST | Signs SEP-10 transaction envelopes |
+| `/sign-sep-45` | POST | Signs SEP-45 authorization entries |
 
 All signing endpoints require `Authorization: Bearer <token>` header.
 
@@ -158,7 +158,7 @@ docker run -d \
 
 ### SEP-10 Signing
 ```bash
-curl -X POST https://your-domain.com/sign \
+curl -X POST https://your-domain.com/sign-sep-10 \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -169,7 +169,7 @@ curl -X POST https://your-domain.com/sign \
 
 ### SEP-45 Signing
 ```bash
-curl -X POST https://your-domain.com/sign45 \
+curl -X POST https://your-domain.com/sign-sep-45 \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

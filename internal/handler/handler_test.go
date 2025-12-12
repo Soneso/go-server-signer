@@ -61,7 +61,7 @@ func TestSign_Success(t *testing.T) {
 	}
 	reqBytes, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/sign", bytes.NewReader(reqBytes))
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-10", bytes.NewReader(reqBytes))
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -91,7 +91,7 @@ func TestSign_MissingAuth(t *testing.T) {
 	}
 	h := New(cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/sign", nil)
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-10", nil)
 	rr := httptest.NewRecorder()
 	h.Sign(rr, req)
 
@@ -106,7 +106,7 @@ func TestSign_InvalidToken(t *testing.T) {
 	}
 	h := New(cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/sign", nil)
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-10", nil)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	rr := httptest.NewRecorder()
 	h.Sign(rr, req)
@@ -127,7 +127,7 @@ func TestSign_MissingTransaction(t *testing.T) {
 	}
 	reqBytes, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/sign", bytes.NewReader(reqBytes))
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-10", bytes.NewReader(reqBytes))
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -150,7 +150,7 @@ func TestSign_MissingNetworkPassphrase(t *testing.T) {
 	}
 	reqBytes, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest(http.MethodPost, "/sign", bytes.NewReader(reqBytes))
+	req := httptest.NewRequest(http.MethodPost, "/sign-sep-10", bytes.NewReader(reqBytes))
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -214,7 +214,7 @@ func TestSign_MethodNotAllowed(t *testing.T) {
 	cfg := &config.Config{}
 	h := New(cfg)
 
-	req := httptest.NewRequest(http.MethodGet, "/sign", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sign-sep-10", nil)
 	rr := httptest.NewRecorder()
 	h.Sign(rr, req)
 
@@ -227,7 +227,7 @@ func TestSign45_MethodNotAllowed(t *testing.T) {
 	cfg := &config.Config{}
 	h := New(cfg)
 
-	req := httptest.NewRequest(http.MethodGet, "/sign45", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sign-sep-45", nil)
 	rr := httptest.NewRecorder()
 	h.Sign45(rr, req)
 
